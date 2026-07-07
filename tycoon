@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Empire Tycoon</title>
+    <style>
+        body {
+            margin: 0;
+            background: linear-gradient(#112233, #001122);
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+            overflow: hidden;
+        }
+        #game {
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        #money {
+            font-size: 42px;
+            font-weight: bold;
+            color: #00ffaa;
+            margin: 10px;
+        }
+        .shop {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin-top: 30px;
+        }
+        .item {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .item:hover {
+            background: rgba(0,255,150,0.2);
+            transform: scale(1.03);
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 18px;
+            background: #00cc88;
+            color: black;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover { background: #00ffaa; }
+    </style>
+</head>
+<body>
+    <div id="game">
+        <h1>🌟 EMPIRE TYCOON</h1>
+        <div id="money">$0</div>
+        <div id="income">Income: $0 / sec</div>
+        
+        <button onclick="clickEarn()">💰 CLICK TO EARN</button>
+        
+        <div class="shop" id="shop"></div>
+        
+        <button onclick="prestigeReset()" style="margin-top:30px; background:#aa44ff;">Prestige (Coming Soon)</button>
+    </div>
+
+    <script>
+        let money = 0;
+        let totalIncome = 0;
+        let buildings = [
+            { name: "Lemonade Stand", cost: 15, income: 1, count: 0, multiplier: 1.15 },
+            { name: "Coffee Shop", cost: 80, income: 6, count: 0, multiplier: 1.18 },
+            { name: "Pizza Restaurant", cost: 450, income: 28, count: 0, multiplier: 1.20 },
+            { name: "Supermarket", cost: 2200, income: 120, count: 0, multiplier: 1.22 },
+            { name: "Tech Company", cost: 12000, income: 650, count: 0, multiplier: 1.25 },
+            { name: "Oil Rig", cost: 65000, income: 3800, count: 0, multiplier: 1.28 }
+        ];
+        
+        function formatMoney(val) {
+            return '$' + val.toLocaleString('en-US');
+        }
+        
+        function updateUI() {
+            document.getElementById('money').textContent = formatMoney(Math.floor(money));
+            document.getElementById('income').textContent = `Income: ${formatMoney(Math.floor(totalIncome))} / sec`;
+            
+            const shop = document.getElementById('shop');
+            shop.innerHTML = '';
+            
+            buildings.forEach((b, i) => {
+                const div = document.createElement('div');
+                div.className = 'item';
+                div.innerHTML = `
+                    <strong>${b.name}</strong><br>
+                    Owned: ${b.count}<br>
+                    Income: ${formatMoney(b.income * b.count)}/sec<br>
+                    Cost: ${formatMoney(b.cost)}
+                `;
+                div.onclick = () => buyBuilding(i);
+                shop.appendChild(div);
+            });
+        }
+        
+        function clickEarn() {
+            money += 8 + Math.floor(Math.random() * 6);
+            updateUI();
+        }
+        
+        function buyBuilding(index) {
+            const b = buildings[index];
+            if (money >= b.cost) {
+                money -= b.cost;
+                b.count++;
+                totalIncome += b.income;
+                b.cost = Math.floor(b.cost * b.multiplier);
+                updateUI();
+            }
+        }
+        
+        function gameTick() {
+            money += totalIncome / 10; // 10 ticks per second
+            updateUI();
+        }
+        
+        function saveGame() {
+            localStorage.setItem('empireTycoonSave', JSON.stringify({
+                money, buildings, totalIncome
+            }));
+        }
+        
+        function loadGame() {
+            const saved = localStorage.getItem('empireTycoonSave');
+            if (saved) {
+                const data = JSON.parse(saved);
+                money = data.money || 0;
+                totalIncome = data.totalIncome || 0;
+                buildings = data.buildings || buildings;
+            }
+        }
+        
+        // Init
+        loadGame();
+        updateUI();
+        setInterval(gameTick, 100);
+        setInterval(saveGame, 5000);
+        
+        console.log("%cEmpire Tycoon started! Click the big button and buy buildings.", "color:#00ffaa; font-size:16px");
+    </script>
+</body>
+</html>
