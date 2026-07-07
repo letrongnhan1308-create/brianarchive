@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arena Combat 2D - Ultimate</title>
+    <title>Arena Combat 2D</title>
     <style>
         body { margin:0; background:#0a0a1f; color:#fff; font-family:Arial; overflow:hidden; text-align:center; }
         canvas { display:block; margin:20px auto; border:4px solid #334; image-rendering:pixelated; }
@@ -16,51 +16,48 @@
 </head>
 <body>
     <div id="menu">
-        <h1>⚔️ ARENA COMBAT ULTIMATE</h1>
-        <h2>Customize Your Legend</h2>
-        
+        <h1>⚔️ ARENA COMBAT</h1>
+        <h2>Customize</h2>
         <div>Body Skin:</div>
         <div id="skins"></div>
-        
         <label>Color: <input type="color" id="color" value="#00aaff"></label><br>
-        
-        <label>Weapon:
+        <label>Weapon: 
             <select id="weapon">
-                <option value="0">Pistol (Fast)</option>
-                <option value="1" selected>Rifle (Balanced)</option>
-                <option value="2">Shotgun (Close Power)</option>
-                <option value="3">Heavy (Slow & Strong)</option>
+                <option value="0">Pistol</option>
+                <option value="1" selected>Rifle</option>
+                <option value="2">Shotgun</option>
+                <option value="3">Heavy</option>
             </select>
         </label><br><br>
-        
-        <button onclick="startGame()">ENTER THE ARENA</button>
-        <div style="margin-top:10px; font-size:14px;">High Score: <span id="highscore">0</span></div>
+        <button onclick="startGame()">START GAME</button>
+        <div>High Score: <span id="highscore">0</span></div>
     </div>
 
     <div id="ui" style="display:none">
-        <div>Wave <span id="wave">1</span> | Score <span id="score">0</span></div>
-        <div>HP: <div style="display:inline-block;width:260px;background:#222;border:2px solid #555;height:26px;"><div id="pHp" style="height:100%;background:#00ddff;width:100%"></div></div></div>
-        <div>Enemy: <div style="display:inline-block;width:260px;background:#222;border:2px solid #555;height:26px;"><div id="eHp" style="height:100%;background:#ff4444;width:100%"></div></div></div>
+        Wave <span id="wave">1</span> | Score <span id="score">0</span><br>
+        HP: <div style="display:inline-block;width:280px;background:#222;height:26px;border:2px solid #555;"><div id="pHp" style="height:100%;background:#00ddff;width:100%"></div></div>
     </div>
 
-    <canvas id="game" width="920" height="620"></canvas>
+    <canvas id="game" width="940" height="640"></canvas>
 
     <script>
         const canvas = document.getElementById('game');
         const ctx = canvas.getContext('2d');
-        let player = {}, enemy = {}, bullets = [], particles = [];
-        let keys = {}, mouse = {x:460, y:310}, wave = 1, score = 0, highScore = 0, gameRunning = false, shake = 0;
+        
+        let player = {}, enemies = [], bullets = [], particles = [], powerups = [];
+        let keys = {}, mouse = {x:470, y:320}, wave = 1, score = 0, highScore = 0, gameRunning = false, shake = 0;
         
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        
         function playSound(freq, dur, type='sawtooth', vol=0.4) {
             const o = audioCtx.createOscillator(), g = audioCtx.createGain();
             o.type = type; o.frequency.value = freq; g.gain.value = vol;
             o.connect(g).connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + dur);
         }
         
-        function createExplosion(x,y,count,color,size=5) {
-            for(let i=0;i<count;i++) particles.push({x,y, vx:(Math.random()-0.5)*12, vy:(Math.random()-0.5)*12, life:18+Math.random()*20, color, size});
+        function createExplosion(x,y,count,color) {
+            for(let i=0;i<count;i++) {
+                particles.push({x,y, vx:(Math.random()-0.5)*12, vy:(Math.random()-0.5)*12, life:22, color, size:5});
+            }
         }
         
         const skins = ['#00aaff','#ff44aa','#44ff88','#ffaa22'];
@@ -69,14 +66,12 @@
         function initMenu() {
             highScore = localStorage.getItem('arenaHS') || 0;
             document.getElementById('highscore').textContent = highScore;
-            
-            const skinDiv = document.getElementById('skins');
+            const sd = document.getElementById('skins');
             skins.forEach((c,i) => {
                 const d = document.createElement('div');
-                d.className = 'skin';
-                d.style.background = c;
-                d.onclick = () => { selectedSkin = i; document.querySelectorAll('.skin').forEach(s=>s.style.borderColor='#fff'); d.style.borderColor='#ff0'; };
-                skinDiv.appendChild(d);
+                d.className = 'skin'; d.style.background = c;
+                d.onclick = () => { selectedSkin = i; document.querySelectorAll('.skin').forEach(el=>el.style.borderColor='#fff'); d.style.borderColor = '#ff0'; };
+                sd.appendChild(d);
             });
         }
         
@@ -88,130 +83,143 @@
             const wType = parseInt(document.getElementById('weapon').value);
             
             player = {
-                x: 220, y: 310, size: 36, speed: wType===3 ? 4.8 : 6,
-                hp: 100, maxHp: 100, angle:0, gunAngle:0,
-                ammo: wType===2 ? 8 : wType===3 ? 6 : 15,
-                maxAmmo: wType===2 ? 8 : wType===3 ? 6 : 15,
-                reloading: false, reloadTime:0, lastShot:0,
-                shootCooldown: [90,160,280,420][wType],
-                weapon: wType, bodyColor: color, skin: skins[selectedSkin],
-                bob:0, gunOffset:0
+                x:220, y:320, size:36, speed: wType===3?5.2:6.2,
+                hp:100, maxHp:100, angle:0, gunAngle:0,
+                ammo: wType===3?7:wType===2?9:16, maxAmmo: wType===3?7:wType===2?9:16,
+                reloading:false, reloadTime:0, lastShot:0,
+                shootCooldown: [90,160,270,420][wType],
+                weapon:wType, bodyColor:color, skin:skins[selectedSkin],
+                bob:0, gunOffset:0, damageMult:1, speedMult:1
             };
             
-            wave = 1; score = 0;
-            resetWave();
+            wave=1; score=0;
+            spawnWave();
             gameRunning = true;
             gameLoop();
         }
         
-        function resetWave() {
-            player.x = 220; player.y = 310; player.hp = 100; player.ammo = player.maxAmmo;
-            const isBoss = wave % 4 === 0;
-            enemy = {
-                x: 680, y: 310, size: isBoss ? 52 : 34,
-                speed: isBoss ? 3.2 + wave*0.2 : 2.4 + wave*0.35,
-                hp: isBoss ? 280 + wave*80 : 70 + wave*38,
-                maxHp: isBoss ? 280 + wave*80 : 70 + wave*38,
-                angle:0, isBoss
-            };
-            bullets = []; particles = [];
+        function spawnWave() {
+            enemies = [];
+            const count = wave % 4 === 0 ? 1 : Math.min(2 + Math.floor(wave/2), 5);
+            for(let i=0; i<count; i++) {
+                const isBoss = (wave % 4 === 0 && i===0);
+                enemies.push({
+                    x: 650 + Math.random()*100, y: 150 + Math.random()*340,
+                    size: isBoss?54:32, speed: isBoss?3.6:2.8 + wave*0.25,
+                    hp: isBoss?380 + wave*90 : 70 + wave*40,
+                    maxHp: isBoss?380 + wave*90 : 70 + wave*40,
+                    angle:0, isBoss
+                });
+            }
             document.getElementById('wave').textContent = wave;
         }
         
         function shoot() {
-            if (!gameRunning || player.reloading || player.ammo<=0 || Date.now()-player.lastShot < player.shootCooldown) return;
-            player.lastShot = Date.now(); player.ammo--; player.gunOffset = -9;
-            shake = player.weapon === 3 ? 7 : 3.5;
+            if(!gameRunning || player.reloading || player.ammo<=0 || Date.now()-player.lastShot < player.shootCooldown) return;
+            player.lastShot = Date.now();
+            player.ammo--;
+            player.gunOffset = -8;
+            shake = 4;
             
-            const spread = player.weapon === 2 ? 0.25 : 0.05;
-            const count = player.weapon === 2 ? 4 : 1;
-            const bx = player.x + Math.cos(player.gunAngle)*44;
-            const by = player.y + Math.sin(player.gunAngle)*44;
-            
-            for(let i=0; i<count; i++) {
-                const a = player.gunAngle + (Math.random()-0.5)*spread;
-                bullets.push({x:bx, y:by, vx:Math.cos(a)*15.5, vy:Math.sin(a)*15.5, life:50, fromEnemy:false});
+            const bx = player.x + Math.cos(player.gunAngle)*42;
+            const by = player.y + Math.sin(player.gunAngle)*42;
+            const count = player.weapon===2 ? 3 : 1;
+            for(let i=0;i<count;i++) {
+                const a = player.gunAngle + (Math.random()-0.5)*0.2;
+                bullets.push({x:bx,y:by,vx:Math.cos(a)*16,vy:Math.sin(a)*16,life:50,fromEnemy:false,dmg:player.damageMult});
             }
-            
-            playSound(player.weapon===3?90:player.weapon===2?420:260, 0.07, 'square', 0.7);
-            createExplosion(bx, by, 16, '#ffee77', 4);
+            playSound(240,0.1,'square');
         }
         
         function startReload() {
-            if (player.reloading || player.ammo === player.maxAmmo) return;
+            if(player.reloading || player.ammo===player.maxAmmo) return;
             player.reloading = true;
-            player.reloadTime = Date.now() + (player.weapon===3?2400 : player.weapon===2?1100 : 1450);
+            player.reloadTime = Date.now() + (player.weapon===3?2200:1400);
+        }
+        
+        function spawnPowerup(x,y) {
+            const types = ['health','speed','ammo','damage'];
+            powerups.push({x,y+10,type:types[Math.floor(Math.random()*4)],life:380});
         }
         
         function update() {
-            // Movement
-            let moved = false;
-            if(keys['w']||keys['W']){player.y-=player.speed; moved=true;}
-            if(keys['s']||keys['S']){player.y+=player.speed; moved=true;}
-            if(keys['a']||keys['A']){player.x-=player.speed; moved=true;}
-            if(keys['d']||keys['D']){player.x+=player.speed; moved=true;}
-            player.bob = moved ? Math.sin(Date.now()/70)*1.8 : 0;
+            // Player move
+            if(keys['w']||keys['W']) player.y -= player.speed * player.speedMult;
+            if(keys['s']||keys['S']) player.y += player.speed * player.speedMult;
+            if(keys['a']||keys['A']) player.x -= player.speed * player.speedMult;
+            if(keys['d']||keys['D']) player.x += player.speed * player.speedMult;
+            player.bob = (keys['w']||keys['s']||keys['a']||keys['d']) ? Math.sin(Date.now()/70)*2 : 0;
             
-            player.x = Math.max(45, Math.min(canvas.width-45, player.x));
-            player.y = Math.max(45, Math.min(canvas.height-45, player.y));
+            player.x = Math.max(50, Math.min(canvas.width-50, player.x));
+            player.y = Math.max(50, Math.min(canvas.height-50, player.y));
             
-            player.gunAngle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+            player.gunAngle = Math.atan2(mouse.y-player.y, mouse.x-player.x);
             player.angle = player.gunAngle;
-            if(player.gunOffset < 0) player.gunOffset += 1.4;
+            if(player.gunOffset<0) player.gunOffset += 1.4;
             
-            // Enemy
-            const dx = player.x - enemy.x;
-            const dy = player.y - enemy.y;
-            const d = Math.hypot(dx,dy)||1;
-            enemy.x += dx/d * enemy.speed;
-            enemy.y += dy/d * enemy.speed;
-            enemy.angle = Math.atan2(dy,dx);
-            
-            const shootChance = enemy.isBoss ? 0.045 : 0.027;
-            if(Math.random() < shootChance) {
-                bullets.push({x:enemy.x, y:enemy.y, vx:dx/d*11, vy:dy/d*11, life:55, fromEnemy:true});
+            // Enemies
+            for(let i=enemies.length-1; i>=0; i--) {
+                const e = enemies[i];
+                const dx = player.x - e.x, dy = player.y - e.y, d = Math.hypot(dx,dy)||1;
+                e.x += (dx/d) * e.speed;
+                e.y += (dy/d) * e.speed;
+                e.angle = Math.atan2(dy,dx);
+                
+                if(Math.random() < 0.03) {
+                    bullets.push({x:e.x,y:e.y,vx:dx/d*11,vy:dy/d*11,life:55,fromEnemy:true});
+                }
             }
             
-            // Bullets & collisions
-            for(let i=bullets.length-1; i>=0; i--) {
-                const b = bullets[i];
-                b.x += b.vx; b.y += b.vy; b.life--;
-                
+            // Bullets
+            for(let i=bullets.length-1;i>=0;i--) {
+                const b=bullets[i];
+                b.x+=b.vx; b.y+=b.vy; b.life--;
                 if(!b.fromEnemy) {
-                    if(Math.hypot(b.x-enemy.x, b.y-enemy.y) < enemy.size*0.8) {
-                        enemy.hp -= player.weapon===3?42 : player.weapon===2?18 : 26;
-                        bullets.splice(i,1);
-                        createExplosion(b.x,b.y,9,'#ffaa44');
-                        if(enemy.hp<=0) {
-                            createExplosion(enemy.x,enemy.y, enemy.isBoss?55:32, '#ff3366');
-                            score += enemy.isBoss ? 420 : 120;
-                            playSound(150,0.8,'sine');
-                            wave++;
-                            document.getElementById('score').textContent = score;
-                            resetWave();
+                    for(let j=enemies.length-1;j>=0;j--) {
+                        const e=enemies[j];
+                        if(Math.hypot(b.x-e.x,b.y-e.y) < e.size*0.8) {
+                            e.hp -= 26 * (b.dmg||1);
+                            bullets.splice(i,1);
+                            if(e.hp<=0) {
+                                createExplosion(e.x,e.y, e.isBoss?45:22, '#ff3366');
+                                score += e.isBoss?500:120;
+                                spawnPowerup(e.x,e.y);
+                                enemies.splice(j,1);
+                                if(enemies.length===0) { wave++; spawnWave(); document.getElementById('score').textContent=score; }
+                            }
+                            break;
                         }
-                        continue;
                     }
-                } else if(Math.hypot(b.x-player.x, b.y-player.y) < player.size*0.75) {
-                    player.hp -= enemy.isBoss ? 28 : 16;
+                } else if(Math.hypot(b.x-player.x,b.y-player.y) < player.size*0.75) {
+                    player.hp -= 18;
                     bullets.splice(i,1);
-                    shake = 8;
-                    playSound(520,0.15);
-                    if(player.hp<=0) {
-                        createExplosion(player.x,player.y,45,'#4488ff');
-                        endGame();
-                    }
+                    shake = 6;
+                    if(player.hp<=0) endGame();
                 }
                 if(b.life<=0) bullets.splice(i,1);
             }
             
+            // Powerups
+            for(let i=powerups.length-1;i>=0;i--) {
+                const p=powerups[i]; p.life--;
+                if(Math.hypot(p.x-player.x, p.y-player.y)<40) {
+                    if(p.type==='health') player.hp = Math.min(player.maxHp, player.hp+40);
+                    else if(p.type==='speed') player.speedMult = 1.75;
+                    else if(p.type==='ammo') player.ammo = player.maxAmmo;
+                    else if(p.type==='damage') player.damageMult = 1.7;
+                    powerups.splice(i,1);
+                }
+                if(p.life<=0) powerups.splice(i,1);
+            }
+            
             // Particles
             for(let i=particles.length-1;i>=0;i--) {
-                const p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.life--; p.vx*=0.95; p.vy*=0.95;
+                const p=particles[i];
+                p.x += p.vx; p.y += p.vy; p.life--;
                 if(p.life<=0) particles.splice(i,1);
             }
             
-            if(player.reloading && Date.now()>player.reloadTime) {
+            if(player.reloading && Date.now() > player.reloadTime) {
                 player.ammo = player.maxAmmo; player.reloading = false;
             }
             
@@ -219,14 +227,13 @@
         }
         
         function draw() {
-            ctx.fillStyle = '#111122';
+            ctx.fillStyle = '#0f0f25';
             ctx.fillRect(0,0,canvas.width,canvas.height);
-            
-            ctx.strokeStyle = '#445577'; ctx.lineWidth=42;
+            ctx.strokeStyle = '#445577'; ctx.lineWidth=40;
             ctx.strokeRect(35,35,canvas.width-70,canvas.height-70);
             
-            const sx = shake>0?(Math.random()-0.5)*shake:0;
-            ctx.save(); ctx.translate(sx,0); shake*=0.8;
+            const sx = shake>0 ? (Math.random()-0.5)*shake : 0;
+            ctx.save(); ctx.translate(sx,0); shake *= 0.8;
             
             // Player
             ctx.save();
@@ -235,42 +242,42 @@
             ctx.fillStyle = player.skin;
             ctx.fillRect(-18,-18,36,36);
             ctx.fillStyle = player.bodyColor;
-            ctx.fillRect(-13,-13,26,12);
-            
-            // Weapon
-            ctx.fillStyle = player.weapon===3?'#555': player.weapon===2?'#773333':'#333';
-            ctx.fillRect(14,-8, player.weapon===3?42:32, 15);
-            ctx.fillStyle = '#111';
-            ctx.fillRect(42,-5,22,9);
+            ctx.fillRect(-13,-13,26,14);
+            ctx.fillStyle = '#333';
+            ctx.fillRect(16,-7,36,14);
             ctx.restore();
             
-            // Enemy
-            ctx.save();
-            ctx.translate(enemy.x, enemy.y);
-            ctx.rotate(enemy.angle);
-            ctx.fillStyle = enemy.isBoss ? '#aa1122' : '#cc2222';
-            ctx.fillRect(-enemy.size/2, -enemy.size/2, enemy.size, enemy.size);
-            ctx.fillStyle = '#551111';
-            ctx.fillRect(-enemy.size/2+6, -8, enemy.size-12, 14);
-            ctx.restore();
+            // Enemies
+            for(let e of enemies) {
+                ctx.save();
+                ctx.translate(e.x, e.y);
+                ctx.rotate(e.angle);
+                ctx.fillStyle = e.isBoss ? '#aa1122' : '#dd3333';
+                ctx.fillRect(-e.size/2, -e.size/2, e.size, e.size);
+                ctx.restore();
+            }
             
-            // Bullets & Particles
-            ctx.fillStyle = '#ffdd88';
+            ctx.fillStyle = '#ffee88';
             for(let b of bullets) ctx.fillRect(b.x-3,b.y-3,6,6);
             
-            for(let p of particles) {
-                ctx.globalAlpha = p.life/25;
-                ctx.fillStyle = p.color;
-                ctx.fillRect(p.x-p.size/2, p.y-p.size/2, p.size, p.size);
+            for(let p of powerups) {
+                ctx.fillStyle = p.type==='health'?'#ff5555':p.type==='speed'?'#44ff99':'#ffdd44';
+                ctx.fillRect(p.x-9,p.y-9,18,18);
             }
-            ctx.globalAlpha = 1; ctx.restore();
+            
+            for(let p of particles) {
+                ctx.globalAlpha = p.life/22;
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x-3,p.y-3,6,6);
+            }
+            ctx.globalAlpha=1; ctx.restore();
         }
         
         function gameLoop() {
             if(!gameRunning) return;
-            update(); draw();
+            update();
+            draw();
             document.getElementById('pHp').style.width = (player.hp/player.maxHp*100)+'%';
-            document.getElementById('eHp').style.width = (enemy.hp/enemy.maxHp*100)+'%';
             requestAnimationFrame(gameLoop);
         }
         
@@ -280,13 +287,17 @@
                 highScore = score;
                 localStorage.setItem('arenaHS', highScore);
             }
-            alert(`💥 GAME OVER\nScore: ${score}\nWave: ${wave}\nNew High Score: ${highScore}`);
-            setTimeout(() => location.reload(), 800);
+            alert(`Game Over! Score: ${score} | Wave: ${wave}`);
+            setTimeout(()=>location.reload(),600);
         }
         
-        window.addEventListener('keydown', e=>{keys[e.key]=true; if(e.key.toLowerCase()==='r') startReload();});
-        window.addEventListener('keyup', e=>keys[e.key]=false);
-        canvas.addEventListener('mousemove', e=>{ const r=canvas.getBoundingClientRect(); mouse.x=e.clientX-r.left; mouse.y=e.clientY-r.top; });
+        window.addEventListener('keydown', e => { keys[e.key] = true; if(e.key.toLowerCase()==='r') startReload(); });
+        window.addEventListener('keyup', e => keys[e.key] = false);
+        canvas.addEventListener('mousemove', e => {
+            const r = canvas.getBoundingClientRect();
+            mouse.x = e.clientX - r.left;
+            mouse.y = e.clientY - r.top;
+        });
         canvas.addEventListener('click', shoot);
         
         initMenu();
