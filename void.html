@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Arena Fighting VS Bot</title>
+    <title>2D Arena Fighting VS Bot</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: sans-serif; background: #05050a; user-select: none; }
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background: #0a0a16; user-select: none; }
         
         #hud {
             position: absolute;
             top: 20px;
             left: 20px;
             color: white;
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(0, 0, 0, 0.7);
             padding: 15px;
             border-radius: 8px;
             border: 1px solid #333;
@@ -54,14 +54,16 @@
             z-index: 100;
         }
         .back-btn:hover { background: #21262d; color: white; }
+        
+        /* Màn hình Canvas vẽ trò chơi */
+        canvas { display: block; width: 100vw; height: 100vh; }
     </style>
-    <script src="https://cloudflare.com"></script>
 </head>
 <body>
 
     <div id="hud">
-        <h3 style="margin: 0 0 5px 0; color: #58a6ff;">ARENA COMBAT</h3>
-        <div>Your HP (Green):</div>
+        <h3 style="margin: 0 0 5px 0; color: #58a6ff;">ARENA COMBAT (2D MODE)</h3>
+        <div>Your HP (Blue):</div>
         <div class="bar-container"><div id="player-hp"></div></div>
         <div>Bot Enemy HP (Red):</div>
         <div class="bar-container"><div id="bot-hp"></div></div>
@@ -73,115 +75,93 @@
 
     <a href="index.html" class="back-btn">⬅️ Exit to Lobby Portal</a>
 
+    <canvas id="gameCanvas"></canvas>
+
     <script>
-        const player = { hp: 100, maxHp: 100, speed: 0.08, mesh: null, isAttacking: false };
-        const bot = { hp: 100, maxHp: 100, speed: 0.04, mesh: null, isAttacking: false, attackCooldown: 0 };
-        const keys = { w: false, a: false, s: false, d: false, space: false };
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
 
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a0a16);
-        scene.fog = new THREE.FogExp2(0x0a0a16, 0.05);
+        // Tự động chỉnh kích thước canvas theo màn hình
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
 
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 10, 12); 
+        // --- CẤU HÌNH NHÂN VẬT ---
+        const player = {
+            x: window.innerWidth / 2 - 100,
+            y: window.innerHeight / 2,
+            size: 40,
+            hp: 100,
+            speed: 5,
+            isAttacking: false,
+            attackTimer: 0
+        };
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+        const bot = {
+            x: window.innerWidth / 2 + 100,
+            y: window.innerHeight / 2,
+            size: 40,
+            hp: 100,
+            speed: 2.2,
+            attackCooldown: 0
+        };
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-        scene.add(ambientLight);
-        const dirLight = new THREE.DirectionalLight(0x79a6ff, 0.8);
-        dirLight.position.set(10, 20, 10);
-        scene.add(dirLight);
+        const keys = { w: false, a: false, s: false, d: false };
 
-        const floorGeo = new THREE.CylinderGeometry(12, 12, 0.5, 32);
-        const floorMat = new THREE.MeshStandardMaterial({ color: 0x1f1f2e, roughness: 0.5 });
-        const floor = new THREE.Mesh(floorGeo, floorMat);
-        floor.position.y = -0.25;
-        scene.add(floor);
-
-        const pGeo = new THREE.BoxGeometry(1, 1.8, 1);
-        const pMat = new THREE.MeshStandardMaterial({ color: 0x3498db });
-        player.mesh = new THREE.Mesh(pGeo, pMat);
-        player.mesh.position.set(-4, 0.9, 0);
-        scene.add(player.mesh);
-
-        const swordGeo = new THREE.BoxGeometry(0.2, 1.2, 0.2);
-        const swordMat = new THREE.MeshStandardMaterial({ color: 0xf1c40f });
-        const pSword = new THREE.Mesh(swordGeo, swordMat);
-        pSword.position.set(0.6, 0, -0.6);
-        pSword.rotation.x = Math.PI / 2; 
-        player.mesh.add(pSword);
-
-        const bGeo = new THREE.BoxGeometry(1, 1.8, 1);
-        const bMat = new THREE.MeshStandardMaterial({ color: 0xe74c3c });
-        bot.mesh = new THREE.Mesh(bGeo, bMat);
-        bot.mesh.position.set(4, 0.9, 0);
-        scene.add(bot.mesh);
-
-        const bSword = new THREE.Mesh(swordGeo, new THREE.MeshStandardMaterial({ color: 0xff3f34 }));
-        bSword.position.set(-0.6, 0, -0.6);
-        bSword.rotation.x = Math.PI / 2;
-        bot.mesh.add(bSword);
-
+        // --- BẮT SỰ KIỆN PHÍM BẤM ---
         window.addEventListener('keydown', (e) => {
-            if (e.key.toLowerCase() === 'w') keys.w = true;
-            if (e.key.toLowerCase() === 'a') keys.a = true;
-            if (e.key.toLowerCase() === 's') keys.s = true;
-            if (e.key.toLowerCase() === 'd') keys.d = true;
-            if (e.key === ' ') { keys.space = true; playerAttack(); }
+            const k = e.key.toLowerCase();
+            if (k === 'w') keys.w = true;
+            if (k === 'a') keys.a = true;
+            if (k === 's') keys.s = true;
+            if (k === 'd') keys.d = true;
+            if (e.key === ' ') {
+                if (!player.isAttacking) {
+                    player.isAttacking = true;
+                    player.attackTimer = 10; // Đòn đánh kéo dài 10 khung hình
+                    checkHit(player, bot, 'bot-hp');
+                }
+            }
         });
 
         window.addEventListener('keyup', (e) => {
-            if (e.key.toLowerCase() === 'w') keys.w = false;
-            if (e.key.toLowerCase() === 'a') keys.a = false;
-            if (e.key.toLowerCase() === 's') keys.s = false;
-            if (e.key.toLowerCase() === 'd') keys.d = false;
-            if (e.key === ' ') keys.space = false;
+            const k = e.key.toLowerCase();
+            if (k === 'w') keys.w = false;
+            if (k === 'a') keys.a = false;
+            if (k === 's') keys.s = false;
+            if (k === 'd') keys.d = false;
         });
 
-        function playerAttack() {
-            if (player.isAttacking) return;
-            player.isAttacking = true;
-
-            let startTime = Date.now();
-            function swingWeaponAnimation() {
-                let elapsed = Date.now() - startTime;
-                if (elapsed < 150) {
-                    player.mesh.rotation.y += 0.1;
-                    requestAnimationFrame(swingWeaponAnimation);
-                } else if (elapsed < 300) {
-                    player.mesh.rotation.y -= 0.1;
-                    requestAnimationFrame(swingWeaponAnimation);
-                } else {
-                    player.isAttacking = false;
-                    checkHit(player, bot, 'bot-hp'); 
-                }
-            }
-            swingWeaponAnimation();
-        }
-
+        // --- KIỂM TRA VA CHẠM ĐÒN ĐÁNH ---
         function checkHit(attacker, target, barId) {
-            const dist = attacker.mesh.position.distanceTo(target.mesh.position);
-            
-            if (dist < 2.5) {
+            const dx = target.x - attacker.x;
+            const dy = target.y - attacker.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            // Khoảng cách đủ gần để trúng đòn (80 pixel)
+            if (distance < 80) {
                 target.hp -= 15;
                 if (target.hp < 0) target.hp = 0;
-                
                 document.getElementById(barId).style.width = target.hp + "%";
 
-                target.mesh.position.addScaledVector(
-                    new THREE.Vector3().subVectors(target.mesh.position, attacker.mesh.position).normalize(), 
-                    0.8
-                );
-                
+                // Hiệu ứng đẩy lùi (Knockback)
+                const angle = Math.atan2(dy, dx);
+                target.x += Math.cos(angle) * 35;
+                target.y += Math.sin(angle) * 35;
+
+                // Kiểm tra kết thúc trận đấu
                 if (target.hp <= 0) {
                     setTimeout(() => {
                         alert(barId === 'bot-hp' ? "🎉 Victory! You defeated the enemy Bot!" : "💀 Defeat! The Bot knocked you out!");
-                        player.hp = 100; bot.hp = 100;
-                        player.mesh.position.set(-4, 0.9, 0);
-                        bot.mesh.position.set(4, 0.9, 0);
+                        player.hp = 100;
+                        bot.hp = 100;
+                        player.x = canvas.width / 2 - 100;
+                        player.y = canvas.height / 2;
+                        bot.x = canvas.width / 2 + 100;
+                        bot.y = canvas.height / 2;
                         document.getElementById('player-hp').style.width = "100%";
                         document.getElementById('bot-hp').style.width = "100%";
                     }, 200);
@@ -189,50 +169,71 @@
             }
         }
 
-        function animate() {
-            requestAnimationFrame(animate);
+        // --- VÒNG LẶP GAME CHẠY LIÊN TỤC ---
+        function update() {
+            // 1. Người chơi di chuyển dựa trên WASD
+            if (keys.w) player.y -= player.speed;
+            if (keys.s) player.y += player.speed;
+            if (keys.a) player.x -= player.speed;
+            if (keys.d) player.x += player.speed;
 
-            if (keys.w) player.mesh.position.z -= player.speed;
-            if (keys.s) player.mesh.position.z += player.speed;
-            if (keys.a) player.mesh.position.x -= player.speed;
-            if (keys.d) player.mesh.position.x += player.speed;
-
-            const pDistFromCenter = player.mesh.position.distanceTo(new THREE.Vector3(0, 0.9, 0));
-            if (pDistFromCenter > 11) {
-                player.mesh.position.setLength(11);
-                player.mesh.position.y = 0.9;
+            // Xử lý thời gian vung kiếm của người chơi
+            if (player.isAttacking) {
+                player.attackTimer--;
+                if (player.attackTimer <= 0) player.isAttacking = false;
             }
 
-            camera.position.x = player.mesh.position.x;
-            camera.position.z = player.mesh.position.z + 12;
+            // 2. AI của Bot di chuyển đuổi theo Người chơi
+            const dx = player.x - bot.x;
+            const dy = player.y - bot.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
 
-            bot.mesh.lookAt(player.mesh.position.x, bot.mesh.position.y, player.mesh.position.z);
-            const distToPlayer = bot.mesh.position.distanceTo(player.mesh.position);
-
-            if (distToPlayer > 2.0) {
-                const dir = new THREE.Vector3().subVectors(player.mesh.position, bot.mesh.position).normalize();
-                bot.mesh.position.addScaledVector(dir, bot.speed);
+            if (distance > 45) {
+                // Đuổi theo người chơi nếu ở xa
+                bot.x += (dx / distance) * bot.speed;
+                bot.y += (dy / distance) * bot.speed;
             } else {
+                // Tấn công người chơi nếu đứng sát
                 bot.attackCooldown++;
-                if (bot.attackCooldown > 40) {
+                if (bot.attackCooldown > 35) {
                     bot.attackCooldown = 0;
                     checkHit(bot, player, 'player-hp');
-                    
-                    bot.mesh.scale.set(1.2, 1.2, 1.2);
-                    setTimeout(() => bot.mesh.scale.set(1, 1, 1), 100);
                 }
             }
 
-            renderer.render(scene, camera);
+            // --- VẼ ĐỒ HỌA LÊN MÀN HÌNH ---
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Xóa màn hình cũ
+
+            // Vẽ sàn đấu vòng tròn trung tâm
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height / 2, 220, 0, Math.PI * 2);
+            ctx.fillStyle = "#161b22";
+            ctx.fill();
+            ctx.strokeStyle = "#30363d";
+            ctx.lineWidth = 5;
+            ctx.stroke();
+
+            // Vẽ tầm đánh khi Người chơi tấn công
+            if (player.isAttacking) {
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, 65, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(88, 166, 255, 0.2)";
+                ctx.fill();
+            }
+
+            // Vẽ Người chơi (Khối màu Xanh Dương)
+            ctx.fillStyle = "#58a6ff";
+            ctx.fillRect(player.x - player.size / 2, player.y - player.size / 2, player.size, player.size);
+
+            // Vẽ Bot Kẻ địch (Khối màu Đỏ)
+            ctx.fillStyle = "#ff4757";
+            ctx.fillRect(bot.x - bot.size / 2, bot.y - bot.size / 2, bot.size, bot.size);
+
+            requestAnimationFrame(update);
         }
 
-        animate();
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        // Khởi chạy vòng lặp trò chơi
+        update();
     </script>
 </body>
 </html>
