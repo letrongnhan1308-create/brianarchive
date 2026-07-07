@@ -3,237 +3,293 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D Arena Fighting VS Bot</title>
+    <title>Arena Combat 2D - Ultimate</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: sans-serif; background: #0a0a16; user-select: none; }
-        
-        #hud {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: white;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #333;
-            pointer-events: none;
-            z-index: 10;
-        }
-        .bar-container { width: 200px; height: 15px; background: #333; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
-        #player-hp { width: 100%; height: 100%; background: #2ed573; transition: 0.1s; }
-        #bot-hp { width: 100%; height: 100%; background: #ff4757; transition: 0.1s; }
-
-        #controls-info {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: #aaa;
-            background: rgba(0,0,0,0.8);
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 14px;
-            text-align: center;
-            pointer-events: none;
-            z-index: 10;
-        }
-
-        .back-btn {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background: #161b22;
-            color: #8b949e;
-            border: 1px solid #30363d;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            text-decoration: none;
-            font-weight: bold;
-            font-size: 14px;
-            z-index: 100;
-        }
-        .back-btn:hover { background: #21262d; color: white; }
-        
-        /* Màn hình Canvas vẽ trò chơi */
-        canvas { display: block; width: 100vw; height: 100vh; }
+        body { margin:0; background:#0a0a1f; color:#fff; font-family:Arial; overflow:hidden; text-align:center; }
+        canvas { display:block; margin:20px auto; border:4px solid #334; image-rendering:pixelated; }
+        #menu, #ui { position:absolute; top:15px; left:50%; transform:translateX(-50%); background:rgba(10,10,30,0.92); padding:20px; border-radius:12px; z-index:100; min-width:380px; }
+        button { padding:10px 20px; margin:6px; background:#3366dd; color:white; border:none; border-radius:8px; font-size:16px; cursor:pointer; }
+        button:hover { background:#5588ff; }
+        select, input { margin:8px; padding:6px; }
+        .skin { display:inline-block; width:50px; height:50px; border:3px solid #fff; margin:4px; cursor:pointer; }
     </style>
 </head>
 <body>
-
-    <div id="hud">
-        <h3 style="margin: 0 0 5px 0; color: #58a6ff;">ARENA COMBAT (2D MODE)</h3>
-        <div>Your HP (Blue):</div>
-        <div class="bar-container"><div id="player-hp"></div></div>
-        <div>Bot Enemy HP (Red):</div>
-        <div class="bar-container"><div id="bot-hp"></div></div>
+    <div id="menu">
+        <h1>⚔️ ARENA COMBAT ULTIMATE</h1>
+        <h2>Customize Your Legend</h2>
+        
+        <div>Body Skin:</div>
+        <div id="skins"></div>
+        
+        <label>Color: <input type="color" id="color" value="#00aaff"></label><br>
+        
+        <label>Weapon:
+            <select id="weapon">
+                <option value="0">Pistol (Fast)</option>
+                <option value="1" selected>Rifle (Balanced)</option>
+                <option value="2">Shotgun (Close Power)</option>
+                <option value="3">Heavy (Slow & Strong)</option>
+            </select>
+        </label><br><br>
+        
+        <button onclick="startGame()">ENTER THE ARENA</button>
+        <div style="margin-top:10px; font-size:14px;">High Score: <span id="highscore">0</span></div>
     </div>
 
-    <div id="controls-info">
-        🎮 <b>Move:</b> W, A, S, D | ⚔️ <b>Strike Attack:</b> SPACEBAR
+    <div id="ui" style="display:none">
+        <div>Wave <span id="wave">1</span> | Score <span id="score">0</span></div>
+        <div>HP: <div style="display:inline-block;width:260px;background:#222;border:2px solid #555;height:26px;"><div id="pHp" style="height:100%;background:#00ddff;width:100%"></div></div></div>
+        <div>Enemy: <div style="display:inline-block;width:260px;background:#222;border:2px solid #555;height:26px;"><div id="eHp" style="height:100%;background:#ff4444;width:100%"></div></div></div>
     </div>
 
-    <a href="index.html" class="back-btn">⬅️ Exit to Lobby Portal</a>
-
-    <canvas id="gameCanvas"></canvas>
+    <canvas id="game" width="920" height="620"></canvas>
 
     <script>
-        const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d");
-
-        // Tự động chỉnh kích thước canvas theo màn hình
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        let player = {}, enemy = {}, bullets = [], particles = [];
+        let keys = {}, mouse = {x:460, y:310}, wave = 1, score = 0, highScore = 0, gameRunning = false, shake = 0;
+        
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(freq, dur, type='sawtooth', vol=0.4) {
+            const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+            o.type = type; o.frequency.value = freq; g.gain.value = vol;
+            o.connect(g).connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + dur);
         }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
-
-        // --- CẤU HÌNH NHÂN VẬT ---
-        const player = {
-            x: window.innerWidth / 2 - 100,
-            y: window.innerHeight / 2,
-            size: 40,
-            hp: 100,
-            speed: 5,
-            isAttacking: false,
-            attackTimer: 0
-        };
-
-        const bot = {
-            x: window.innerWidth / 2 + 100,
-            y: window.innerHeight / 2,
-            size: 40,
-            hp: 100,
-            speed: 2.2,
-            attackCooldown: 0
-        };
-
-        const keys = { w: false, a: false, s: false, d: false };
-
-        // --- BẮT SỰ KIỆN PHÍM BẤM ---
-        window.addEventListener('keydown', (e) => {
-            const k = e.key.toLowerCase();
-            if (k === 'w') keys.w = true;
-            if (k === 'a') keys.a = true;
-            if (k === 's') keys.s = true;
-            if (k === 'd') keys.d = true;
-            if (e.key === ' ') {
-                if (!player.isAttacking) {
-                    player.isAttacking = true;
-                    player.attackTimer = 10; // Đòn đánh kéo dài 10 khung hình
-                    checkHit(player, bot, 'bot-hp');
-                }
-            }
-        });
-
-        window.addEventListener('keyup', (e) => {
-            const k = e.key.toLowerCase();
-            if (k === 'w') keys.w = false;
-            if (k === 'a') keys.a = false;
-            if (k === 's') keys.s = false;
-            if (k === 'd') keys.d = false;
-        });
-
-        // --- KIỂM TRA VA CHẠM ĐÒN ĐÁNH ---
-        function checkHit(attacker, target, barId) {
-            const dx = target.x - attacker.x;
-            const dy = target.y - attacker.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-
-            // Khoảng cách đủ gần để trúng đòn (80 pixel)
-            if (distance < 80) {
-                target.hp -= 15;
-                if (target.hp < 0) target.hp = 0;
-                document.getElementById(barId).style.width = target.hp + "%";
-
-                // Hiệu ứng đẩy lùi (Knockback)
-                const angle = Math.atan2(dy, dx);
-                target.x += Math.cos(angle) * 35;
-                target.y += Math.sin(angle) * 35;
-
-                // Kiểm tra kết thúc trận đấu
-                if (target.hp <= 0) {
-                    setTimeout(() => {
-                        alert(barId === 'bot-hp' ? "🎉 Victory! You defeated the enemy Bot!" : "💀 Defeat! The Bot knocked you out!");
-                        player.hp = 100;
-                        bot.hp = 100;
-                        player.x = canvas.width / 2 - 100;
-                        player.y = canvas.height / 2;
-                        bot.x = canvas.width / 2 + 100;
-                        bot.y = canvas.height / 2;
-                        document.getElementById('player-hp').style.width = "100%";
-                        document.getElementById('bot-hp').style.width = "100%";
-                    }, 200);
-                }
-            }
+        
+        function createExplosion(x,y,count,color,size=5) {
+            for(let i=0;i<count;i++) particles.push({x,y, vx:(Math.random()-0.5)*12, vy:(Math.random()-0.5)*12, life:18+Math.random()*20, color, size});
         }
-
-        // --- VÒNG LẶP GAME CHẠY LIÊN TỤC ---
+        
+        const skins = ['#00aaff','#ff44aa','#44ff88','#ffaa22'];
+        let selectedSkin = 0;
+        
+        function initMenu() {
+            highScore = localStorage.getItem('arenaHS') || 0;
+            document.getElementById('highscore').textContent = highScore;
+            
+            const skinDiv = document.getElementById('skins');
+            skins.forEach((c,i) => {
+                const d = document.createElement('div');
+                d.className = 'skin';
+                d.style.background = c;
+                d.onclick = () => { selectedSkin = i; document.querySelectorAll('.skin').forEach(s=>s.style.borderColor='#fff'); d.style.borderColor='#ff0'; };
+                skinDiv.appendChild(d);
+            });
+        }
+        
+        function startGame() {
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('ui').style.display = 'block';
+            
+            const color = document.getElementById('color').value;
+            const wType = parseInt(document.getElementById('weapon').value);
+            
+            player = {
+                x: 220, y: 310, size: 36, speed: wType===3 ? 4.8 : 6,
+                hp: 100, maxHp: 100, angle:0, gunAngle:0,
+                ammo: wType===2 ? 8 : wType===3 ? 6 : 15,
+                maxAmmo: wType===2 ? 8 : wType===3 ? 6 : 15,
+                reloading: false, reloadTime:0, lastShot:0,
+                shootCooldown: [90,160,280,420][wType],
+                weapon: wType, bodyColor: color, skin: skins[selectedSkin],
+                bob:0, gunOffset:0
+            };
+            
+            wave = 1; score = 0;
+            resetWave();
+            gameRunning = true;
+            gameLoop();
+        }
+        
+        function resetWave() {
+            player.x = 220; player.y = 310; player.hp = 100; player.ammo = player.maxAmmo;
+            const isBoss = wave % 4 === 0;
+            enemy = {
+                x: 680, y: 310, size: isBoss ? 52 : 34,
+                speed: isBoss ? 3.2 + wave*0.2 : 2.4 + wave*0.35,
+                hp: isBoss ? 280 + wave*80 : 70 + wave*38,
+                maxHp: isBoss ? 280 + wave*80 : 70 + wave*38,
+                angle:0, isBoss
+            };
+            bullets = []; particles = [];
+            document.getElementById('wave').textContent = wave;
+        }
+        
+        function shoot() {
+            if (!gameRunning || player.reloading || player.ammo<=0 || Date.now()-player.lastShot < player.shootCooldown) return;
+            player.lastShot = Date.now(); player.ammo--; player.gunOffset = -9;
+            shake = player.weapon === 3 ? 7 : 3.5;
+            
+            const spread = player.weapon === 2 ? 0.25 : 0.05;
+            const count = player.weapon === 2 ? 4 : 1;
+            const bx = player.x + Math.cos(player.gunAngle)*44;
+            const by = player.y + Math.sin(player.gunAngle)*44;
+            
+            for(let i=0; i<count; i++) {
+                const a = player.gunAngle + (Math.random()-0.5)*spread;
+                bullets.push({x:bx, y:by, vx:Math.cos(a)*15.5, vy:Math.sin(a)*15.5, life:50, fromEnemy:false});
+            }
+            
+            playSound(player.weapon===3?90:player.weapon===2?420:260, 0.07, 'square', 0.7);
+            createExplosion(bx, by, 16, '#ffee77', 4);
+        }
+        
+        function startReload() {
+            if (player.reloading || player.ammo === player.maxAmmo) return;
+            player.reloading = true;
+            player.reloadTime = Date.now() + (player.weapon===3?2400 : player.weapon===2?1100 : 1450);
+        }
+        
         function update() {
-            // 1. Người chơi di chuyển dựa trên WASD
-            if (keys.w) player.y -= player.speed;
-            if (keys.s) player.y += player.speed;
-            if (keys.a) player.x -= player.speed;
-            if (keys.d) player.x += player.speed;
-
-            // Xử lý thời gian vung kiếm của người chơi
-            if (player.isAttacking) {
-                player.attackTimer--;
-                if (player.attackTimer <= 0) player.isAttacking = false;
+            // Movement
+            let moved = false;
+            if(keys['w']||keys['W']){player.y-=player.speed; moved=true;}
+            if(keys['s']||keys['S']){player.y+=player.speed; moved=true;}
+            if(keys['a']||keys['A']){player.x-=player.speed; moved=true;}
+            if(keys['d']||keys['D']){player.x+=player.speed; moved=true;}
+            player.bob = moved ? Math.sin(Date.now()/70)*1.8 : 0;
+            
+            player.x = Math.max(45, Math.min(canvas.width-45, player.x));
+            player.y = Math.max(45, Math.min(canvas.height-45, player.y));
+            
+            player.gunAngle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+            player.angle = player.gunAngle;
+            if(player.gunOffset < 0) player.gunOffset += 1.4;
+            
+            // Enemy
+            const dx = player.x - enemy.x;
+            const dy = player.y - enemy.y;
+            const d = Math.hypot(dx,dy)||1;
+            enemy.x += dx/d * enemy.speed;
+            enemy.y += dy/d * enemy.speed;
+            enemy.angle = Math.atan2(dy,dx);
+            
+            const shootChance = enemy.isBoss ? 0.045 : 0.027;
+            if(Math.random() < shootChance) {
+                bullets.push({x:enemy.x, y:enemy.y, vx:dx/d*11, vy:dy/d*11, life:55, fromEnemy:true});
             }
-
-            // 2. AI của Bot di chuyển đuổi theo Người chơi
-            const dx = player.x - bot.x;
-            const dy = player.y - bot.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-
-            if (distance > 45) {
-                // Đuổi theo người chơi nếu ở xa
-                bot.x += (dx / distance) * bot.speed;
-                bot.y += (dy / distance) * bot.speed;
-            } else {
-                // Tấn công người chơi nếu đứng sát
-                bot.attackCooldown++;
-                if (bot.attackCooldown > 35) {
-                    bot.attackCooldown = 0;
-                    checkHit(bot, player, 'player-hp');
+            
+            // Bullets & collisions
+            for(let i=bullets.length-1; i>=0; i--) {
+                const b = bullets[i];
+                b.x += b.vx; b.y += b.vy; b.life--;
+                
+                if(!b.fromEnemy) {
+                    if(Math.hypot(b.x-enemy.x, b.y-enemy.y) < enemy.size*0.8) {
+                        enemy.hp -= player.weapon===3?42 : player.weapon===2?18 : 26;
+                        bullets.splice(i,1);
+                        createExplosion(b.x,b.y,9,'#ffaa44');
+                        if(enemy.hp<=0) {
+                            createExplosion(enemy.x,enemy.y, enemy.isBoss?55:32, '#ff3366');
+                            score += enemy.isBoss ? 420 : 120;
+                            playSound(150,0.8,'sine');
+                            wave++;
+                            document.getElementById('score').textContent = score;
+                            resetWave();
+                        }
+                        continue;
+                    }
+                } else if(Math.hypot(b.x-player.x, b.y-player.y) < player.size*0.75) {
+                    player.hp -= enemy.isBoss ? 28 : 16;
+                    bullets.splice(i,1);
+                    shake = 8;
+                    playSound(520,0.15);
+                    if(player.hp<=0) {
+                        createExplosion(player.x,player.y,45,'#4488ff');
+                        endGame();
+                    }
                 }
+                if(b.life<=0) bullets.splice(i,1);
             }
-
-            // --- VẼ ĐỒ HỌA LÊN MÀN HÌNH ---
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // Xóa màn hình cũ
-
-            // Vẽ sàn đấu vòng tròn trung tâm
-            ctx.beginPath();
-            ctx.arc(canvas.width / 2, canvas.height / 2, 220, 0, Math.PI * 2);
-            ctx.fillStyle = "#161b22";
-            ctx.fill();
-            ctx.strokeStyle = "#30363d";
-            ctx.lineWidth = 5;
-            ctx.stroke();
-
-            // Vẽ tầm đánh khi Người chơi tấn công
-            if (player.isAttacking) {
-                ctx.beginPath();
-                ctx.arc(player.x, player.y, 65, 0, Math.PI * 2);
-                ctx.fillStyle = "rgba(88, 166, 255, 0.2)";
-                ctx.fill();
+            
+            // Particles
+            for(let i=particles.length-1;i>=0;i--) {
+                const p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.life--; p.vx*=0.95; p.vy*=0.95;
+                if(p.life<=0) particles.splice(i,1);
             }
-
-            // Vẽ Người chơi (Khối màu Xanh Dương)
-            ctx.fillStyle = "#58a6ff";
-            ctx.fillRect(player.x - player.size / 2, player.y - player.size / 2, player.size, player.size);
-
-            // Vẽ Bot Kẻ địch (Khối màu Đỏ)
-            ctx.fillStyle = "#ff4757";
-            ctx.fillRect(bot.x - bot.size / 2, bot.y - bot.size / 2, bot.size, bot.size);
-
-            requestAnimationFrame(update);
+            
+            if(player.reloading && Date.now()>player.reloadTime) {
+                player.ammo = player.maxAmmo; player.reloading = false;
+            }
+            
+            if(keys[' ']) shoot();
         }
-
-        // Khởi chạy vòng lặp trò chơi
-        update();
+        
+        function draw() {
+            ctx.fillStyle = '#111122';
+            ctx.fillRect(0,0,canvas.width,canvas.height);
+            
+            ctx.strokeStyle = '#445577'; ctx.lineWidth=42;
+            ctx.strokeRect(35,35,canvas.width-70,canvas.height-70);
+            
+            const sx = shake>0?(Math.random()-0.5)*shake:0;
+            ctx.save(); ctx.translate(sx,0); shake*=0.8;
+            
+            // Player
+            ctx.save();
+            ctx.translate(player.x, player.y + player.bob);
+            ctx.rotate(player.angle);
+            ctx.fillStyle = player.skin;
+            ctx.fillRect(-18,-18,36,36);
+            ctx.fillStyle = player.bodyColor;
+            ctx.fillRect(-13,-13,26,12);
+            
+            // Weapon
+            ctx.fillStyle = player.weapon===3?'#555': player.weapon===2?'#773333':'#333';
+            ctx.fillRect(14,-8, player.weapon===3?42:32, 15);
+            ctx.fillStyle = '#111';
+            ctx.fillRect(42,-5,22,9);
+            ctx.restore();
+            
+            // Enemy
+            ctx.save();
+            ctx.translate(enemy.x, enemy.y);
+            ctx.rotate(enemy.angle);
+            ctx.fillStyle = enemy.isBoss ? '#aa1122' : '#cc2222';
+            ctx.fillRect(-enemy.size/2, -enemy.size/2, enemy.size, enemy.size);
+            ctx.fillStyle = '#551111';
+            ctx.fillRect(-enemy.size/2+6, -8, enemy.size-12, 14);
+            ctx.restore();
+            
+            // Bullets & Particles
+            ctx.fillStyle = '#ffdd88';
+            for(let b of bullets) ctx.fillRect(b.x-3,b.y-3,6,6);
+            
+            for(let p of particles) {
+                ctx.globalAlpha = p.life/25;
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x-p.size/2, p.y-p.size/2, p.size, p.size);
+            }
+            ctx.globalAlpha = 1; ctx.restore();
+        }
+        
+        function gameLoop() {
+            if(!gameRunning) return;
+            update(); draw();
+            document.getElementById('pHp').style.width = (player.hp/player.maxHp*100)+'%';
+            document.getElementById('eHp').style.width = (enemy.hp/enemy.maxHp*100)+'%';
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function endGame() {
+            gameRunning = false;
+            if(score > highScore) {
+                highScore = score;
+                localStorage.setItem('arenaHS', highScore);
+            }
+            alert(`💥 GAME OVER\nScore: ${score}\nWave: ${wave}\nNew High Score: ${highScore}`);
+            setTimeout(() => location.reload(), 800);
+        }
+        
+        window.addEventListener('keydown', e=>{keys[e.key]=true; if(e.key.toLowerCase()==='r') startReload();});
+        window.addEventListener('keyup', e=>keys[e.key]=false);
+        canvas.addEventListener('mousemove', e=>{ const r=canvas.getBoundingClientRect(); mouse.x=e.clientX-r.left; mouse.y=e.clientY-r.top; });
+        canvas.addEventListener('click', shoot);
+        
+        initMenu();
     </script>
 </body>
 </html>
